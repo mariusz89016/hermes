@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import pl.allegro.tech.hermes.api.BatchSubscriptionPolicy;
 import pl.allegro.tech.hermes.api.Subscription;
 import pl.allegro.tech.hermes.api.Topic;
+import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.common.kafka.offset.PartitionOffset;
 import pl.allegro.tech.hermes.common.message.wrapper.MessageContentWrapper;
 import pl.allegro.tech.hermes.common.metric.HermesMetrics;
@@ -30,6 +31,7 @@ import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.github.rholder.retry.WaitStrategies.fixedWait;
 import static java.util.Optional.of;
@@ -42,13 +44,14 @@ public class BatchConsumer implements Consumer {
     private final ReceiverFactory messageReceiverFactory;
     private final MessageBatchSender sender;
     private final MessageBatchFactory batchFactory;
-    private final OffsetQueue offsetQueue;
     private final HermesMetrics hermesMetrics;
     private final MessageConverterResolver messageConverterResolver;
     private final MessageContentWrapper messageContentWrapper;
     private final Trackers trackers;
 
     private Topic topic;
+    private OffsetQueue offsetQueue;
+    private ConfigFactory configs;
     private Subscription subscription;
 
     private volatile boolean consuming = true;
@@ -63,6 +66,7 @@ public class BatchConsumer implements Consumer {
                          MessageConverterResolver messageConverterResolver,
                          MessageContentWrapper messageContentWrapper,
                          HermesMetrics hermesMetrics,
+                         ConfigFactory configs,
                          Trackers trackers,
                          Subscription subscription,
                          Topic topic) {
@@ -70,6 +74,7 @@ public class BatchConsumer implements Consumer {
         this.sender = sender;
         this.batchFactory = batchFactory;
         this.offsetQueue = offsetQueue;
+        this.configs = configs;
         this.subscription = subscription;
         this.hermesMetrics = hermesMetrics;
         this.monitoring = new BatchMonitoring(hermesMetrics, trackers);
@@ -149,6 +154,18 @@ public class BatchConsumer implements Consumer {
             tearDown();
             initialize();
         }
+    }
+
+    @Override
+    public void commit(Set<SubscriptionPartitionOffset> offsetsToCommit) {
+        if (receiver != null) {
+            receiver.commit(offsetsToCommit);
+        }
+    }
+
+    @Override
+    public void moveOffset(SubscriptionPartitionOffset subscriptionPartitionOffset) {
+        receiver.moveOffset(subscriptionPartitionOffset);
     }
 
     private Retryer<MessageSendingResult> createRetryer(MessageBatch batch, BatchSubscriptionPolicy policy) {
