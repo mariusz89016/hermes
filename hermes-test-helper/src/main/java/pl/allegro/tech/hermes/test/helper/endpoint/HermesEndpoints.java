@@ -1,12 +1,7 @@
 package pl.allegro.tech.hermes.test.helper.endpoint;
 
 import pl.allegro.tech.hermes.api.Topic;
-import pl.allegro.tech.hermes.api.endpoints.BlacklistEndpoint;
-import pl.allegro.tech.hermes.api.endpoints.GroupEndpoint;
-import pl.allegro.tech.hermes.api.endpoints.QueryEndpoint;
-import pl.allegro.tech.hermes.api.endpoints.SchemaEndpoint;
-import pl.allegro.tech.hermes.api.endpoints.SubscriptionEndpoint;
-import pl.allegro.tech.hermes.api.endpoints.TopicEndpoint;
+import pl.allegro.tech.hermes.api.endpoints.*;
 import pl.allegro.tech.hermes.test.helper.client.Hermes;
 
 import java.util.List;
@@ -23,6 +18,8 @@ public class HermesEndpoints {
 
     private final QueryEndpoint queryEndpoint;
 
+    private final OAuthProviderEndpoint oAuthProviderEndpoint;
+
     private final BlacklistEndpoint blacklistEndpoint;
 
     public HermesEndpoints(Hermes hermes) {
@@ -31,6 +28,7 @@ public class HermesEndpoints {
         this.subscriptionEndpoint = hermes.createSubscriptionEndpoint();
         this.schemaEndpoint = hermes.createSchemaEndpoint();
         this.queryEndpoint = hermes.createQueryEndpoint();
+        this.oAuthProviderEndpoint = hermes.createOAuthProviderEndpoint();
         this.blacklistEndpoint = hermes.createBlacklistEndpoint();
     }
 
@@ -76,5 +74,8 @@ public class HermesEndpoints {
         return subscriptionEndpoint.list(group + "." + topic, tracked);
     }
 
+    public OAuthProviderEndpoint oAuthProvider() {
+        return oAuthProviderEndpoint;
+    }
 }
 
