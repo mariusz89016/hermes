@@ -11,21 +11,22 @@ import javax.inject.Inject;
 
 public class JsonCompiledSchemaRepositoryFactory implements Factory<CompiledSchemaRepository<JsonSchema>> {
 
-    private final SchemaSourceProvider schemaSourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
     private final ConfigFactory configFactory;
     private final ObjectMapper objectMapper;
 
     @Inject
-    public JsonCompiledSchemaRepositoryFactory(ObjectMapper objectMapper, SchemaSourceProvider schemaSourceProvider, ConfigFactory configFactory) {
+    public JsonCompiledSchemaRepositoryFactory(SchemaSourceClient schemaSourceClient, ObjectMapper objectMapper,
+                                               ConfigFactory configFactory) {
+        this.schemaSourceClient = schemaSourceClient;
         this.objectMapper = objectMapper;
-        this.schemaSourceProvider = schemaSourceProvider;
         this.configFactory = configFactory;
     }
 
     @Override
     public CompiledSchemaRepository<JsonSchema> provide() {
         return new CachedCompiledSchemaRepository<>(
-                new DirectCompiledSchemaRepository<>(schemaSourceProvider, SchemaCompilersFactory.jsonSchemaCompiler(objectMapper)),
+                new DirectCompiledSchemaRepository<>(schemaSourceClient, SchemaCompilersFactory.jsonSchemaCompiler(objectMapper)),
                 configFactory.getIntProperty(Configs.SCHEMA_CACHE_COMPILED_MAXIMUM_SIZE),
                 configFactory.getIntProperty(Configs.SCHEMA_CACHE_COMPILED_EXPIRE_AFTER_ACCESS_MINUTES));
     }

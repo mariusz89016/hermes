@@ -1,11 +1,14 @@
-package pl.allegro.tech.hermes.infrastructure.schema.repo;
+package pl.allegro.tech.hermes.infrastructure.schema;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pl.allegro.tech.hermes.api.SchemaSource;
+import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.common.exception.InvalidSchemaException;
 import pl.allegro.tech.hermes.common.exception.SchemaRepoException;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceClient;
 import pl.allegro.tech.hermes.domain.topic.schema.SchemaVersion;
 
 import javax.ws.rs.client.Client;
@@ -23,18 +26,59 @@ import java.util.stream.Collectors;
 
 import static javax.ws.rs.core.Response.Status.Family.SUCCESSFUL;
 
-public class JerseySchemaRepoClient implements SchemaRepoClient {
+public class SchemaRepoSchemaSourceClient implements SchemaSourceClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(JerseySchemaRepoClient.class);
+    private static final Logger logger = LoggerFactory.getLogger(SchemaRepoSchemaSourceClient.class);
 
     private final WebTarget target;
 
-    public JerseySchemaRepoClient(Client client, URI schemaRepoServerUri) {
+    public SchemaRepoSchemaSourceClient(Client client, URI schemaRepoServerUri) {
         this.target = client.target(schemaRepoServerUri);
     }
 
     @Override
-    public void registerSubject(String subject) {
+    public Optional<SchemaSource> getSchemaSource(Topic topic, SchemaVersion version) {
+        String subject = topic.getQualifiedName();
+        Response response = target.path(subject).path("id").path(Integer.toString(version.value())).request().get();
+        return extractSchema(subject, response).map(SchemaSource::valueOf);
+    }
+
+    @Override
+    public Optional<SchemaSource> getLatestSchemaSource(Topic topic) {
+        String subject = topic.getQualifiedName();
+        Response response = target.path(subject).path("latest").request().get();
+        return extractSchema(subject, response).map(SchemaSource::valueOf);
+    }
+
+    @Override
+    public List<SchemaVersion> getVersions(Topic topic) {
+        Response response = target.path(topic.getQualifiedName()).path("all").request().accept(MediaType.APPLICATION_JSON_TYPE).get();
+        if (response.getStatus() == Response.Status.OK.getStatusCode()) {
+            List<SchemaWithId> schemasWithIds = Optional.ofNullable(response.readEntity(new GenericType<List<SchemaWithId>>() {}))
+                    .orElseGet(Collections::emptyList);
+            return schemasWithIds.stream()
+                    .map(SchemaWithId::getId)
+                    .sorted(Comparator.reverseOrder())
+                    .map(SchemaVersion::valueOf)
+                    .collect(Collectors.toList());
+        }
+        return Collections.emptyList();
+    }
+
+    @Override
+    public void registerSchemaSource(Topic topic, SchemaSource schemaSource) {
+        String topicName = topic.getQualifiedName();
+        if (!isSubjectRegistered(topicName)) {
+            registerSubject(topicName);
+        }
+        registerSchema(topicName, schemaSource.value());
+    }
+
+    private boolean isSubjectRegistered(String subject) {
+        return target.path(subject).request().get().getStatus() == Response.Status.OK.getStatusCode();
+    }
+
+    private void registerSubject(String subject) {
         Response response = target.path(subject).request().put(Entity.entity("", MediaType.APPLICATION_FORM_URLENCODED_TYPE));
         if (SUCCESSFUL != response.getStatusInfo().getFamily()) {
             logger.error("Failure subject registration in schema repo. Subject: {}, response code: {}, details: {}",
@@ -43,12 +87,6 @@ public class JerseySchemaRepoClient implements SchemaRepoClient {
         }
     }
 
-    @Override
-    public boolean isSubjectRegistered(String subject) {
-        return target.path(subject).request().get().getStatus() == Response.Status.OK.getStatusCode();
-    }
-
-    @Override
     public void registerSchema(String subject, String schema) {
         Response response = target.path(subject).path("register").request().put(Entity.entity(schema, MediaType.TEXT_PLAIN));
         checkSchemaRegistration(response.getStatusInfo(), subject, response.readEntity(String.class));
@@ -73,15 +111,8 @@ public class JerseySchemaRepoClient implements SchemaRepoClient {
     }
 
     @Override
-    public Optional<String> getLatestSchema(String subject) {
-        Response response = target.path(subject).path("latest").request().get();
-        return extractSchema(subject, response);
-    }
-
-    @Override
-    public Optional<String> getSchema(String subject, SchemaVersion version) {
-        Response response = target.path(subject).path("id").path(Integer.toString(version.value())).request().get();
-        return extractSchema(subject, response);
+    public void deleteAllSchemaSources(Topic topic) {
+        throw new UnsupportedOperationException("Deleting schemas is not supported by this repository type");
     }
 
     private Optional<String> extractSchema(String subject, Response response) {
@@ -92,15 +123,6 @@ public class JerseySchemaRepoClient implements SchemaRepoClient {
             logger.error("Could not find schema for subject {}, reason: {}", subject, response.getStatus());
             return Optional.empty();
         }
-    }
-
-    public List<SchemaVersion> getSchemaVersions(String subject) {
-        Response response = target.path(subject).path("all").request().accept(MediaType.APPLICATION_JSON_TYPE).get();
-        if (response.getStatus() == Response.Status.OK.getStatusCode()) {
-            List<SchemaWithId> schemasWithIds = Optional.ofNullable(response.readEntity(new GenericType<List<SchemaWithId>>() {})).orElseGet(Collections::emptyList);
-            return schemasWithIds.stream().map(SchemaWithId::getId).sorted(Comparator.reverseOrder()).map(SchemaVersion::valueOf).collect(Collectors.toList());
-        }
-        return Collections.emptyList();
     }
 
     private String parseSchema(String schemaResponse) {

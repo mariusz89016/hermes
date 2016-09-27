@@ -21,29 +21,29 @@ public class CachedSchemaVersionsRepository implements SchemaVersionsRepository 
 
     private static final Logger logger = LoggerFactory.getLogger(CachedSchemaVersionsRepository.class);
 
-    private final SchemaSourceProvider schemaSourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
     private final LoadingCache<Topic, List<SchemaVersion>> versionsCache;
 
-    public CachedSchemaVersionsRepository(SchemaSourceProvider schemaSourceProvider, ExecutorService versionsReloader,
+    public CachedSchemaVersionsRepository(SchemaSourceClient schemaSourceClient, ExecutorService versionsReloader,
                                           int refreshAfterWriteMinutes, int expireAfterWriteMinutes) {
-        this(schemaSourceProvider, versionsReloader, refreshAfterWriteMinutes, expireAfterWriteMinutes, Ticker.systemTicker());
+        this(schemaSourceClient, versionsReloader, refreshAfterWriteMinutes, expireAfterWriteMinutes, Ticker.systemTicker());
     }
 
-    CachedSchemaVersionsRepository(SchemaSourceProvider schemaSourceProvider, ExecutorService versionsReloader,
+    CachedSchemaVersionsRepository(SchemaSourceClient schemaSourceClient, ExecutorService versionsReloader,
                                    int refreshAfterWriteMinutes, int expireAfterWriteMinutes, Ticker ticker) {
-        this.schemaSourceProvider = schemaSourceProvider;
+        this.schemaSourceClient = schemaSourceClient;
         this.versionsCache = CacheBuilder
                 .newBuilder()
                 .ticker(ticker)
                 .refreshAfterWrite(refreshAfterWriteMinutes, TimeUnit.MINUTES)
                 .expireAfterWrite(expireAfterWriteMinutes, TimeUnit.MINUTES)
-                .build(new SchemaVersionsLoader(schemaSourceProvider, versionsReloader));
+                .build(new SchemaVersionsLoader(schemaSourceClient, versionsReloader));
     }
 
     @Override
     public List<SchemaVersion> versions(Topic topic, boolean online) {
         try {
-            return online? schemaSourceProvider.versions(topic) : versionsCache.get(topic);
+            return online? schemaSourceClient.getVersions(topic) : versionsCache.get(topic);
         } catch (ExecutionException e) {
             logger.error("Error while loading schema versions for topic {}", topic.getQualifiedName(), e);
             return emptyList();
@@ -52,18 +52,18 @@ public class CachedSchemaVersionsRepository implements SchemaVersionsRepository 
 
     private static class SchemaVersionsLoader extends CacheLoader<Topic, List<SchemaVersion>> {
 
-        private final SchemaSourceProvider schemaSourceProvider;
+        private final SchemaSourceClient schemaSourceClient;
         private final ExecutorService versionsReloader;
 
-        public SchemaVersionsLoader(SchemaSourceProvider schemaSourceProvider, ExecutorService versionsReloader) {
-            this.schemaSourceProvider = schemaSourceProvider;
+        public SchemaVersionsLoader(SchemaSourceClient schemaSourceClient, ExecutorService versionsReloader) {
+            this.schemaSourceClient = schemaSourceClient;
             this.versionsReloader = versionsReloader;
         }
 
         @Override
         public List<SchemaVersion> load(Topic topic) throws Exception {
             logger.info("Loading schema versions for topic {}", topic.getQualifiedName());
-            return schemaSourceProvider.versions(topic);
+            return schemaSourceClient.getVersions(topic);
         }
 
         @Override
@@ -71,7 +71,7 @@ public class CachedSchemaVersionsRepository implements SchemaVersionsRepository 
             ListenableFutureTask<List<SchemaVersion>> task = ListenableFutureTask.create(() -> {
                 logger.info("Reloading schema versions for topic {}", topic.getQualifiedName());
                 try {
-                    return schemaSourceProvider.versions(topic);
+                    return schemaSourceClient.getVersions(topic);
                 } catch (Exception e) {
                     logger.warn("Could not reload schema versions for topic {}", topic.getQualifiedName(), e);
                     throw e;
@@ -81,5 +81,4 @@ public class CachedSchemaVersionsRepository implements SchemaVersionsRepository 
             return task;
         }
     }
-
 }

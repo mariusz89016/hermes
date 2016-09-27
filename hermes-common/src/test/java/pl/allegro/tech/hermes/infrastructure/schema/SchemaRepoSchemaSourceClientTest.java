@@ -1,14 +1,18 @@
-package pl.allegro.tech.hermes.infrastructure.schema.repo;
+package pl.allegro.tech.hermes.infrastructure.schema;
 
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import com.github.tomakehurst.wiremock.client.UrlMatchingStrategy;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.testng.annotations.BeforeTest;
+import pl.allegro.tech.hermes.api.SchemaSource;
+import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.common.exception.InvalidSchemaException;
 import pl.allegro.tech.hermes.common.exception.SchemaRepoException;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceClient;
 import pl.allegro.tech.hermes.domain.topic.schema.SchemaVersion;
+import pl.allegro.tech.hermes.test.helper.builder.TopicBuilder;
 import pl.allegro.tech.hermes.test.helper.util.Ports;
 
 import javax.ws.rs.client.ClientBuilder;
@@ -17,18 +21,30 @@ import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.put;
+import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static com.googlecode.catchexception.CatchException.catchException;
 import static com.googlecode.catchexception.CatchException.caughtException;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class JerseySchemaRepoClientTest {
+public class SchemaRepoSchemaSourceClientTest {
 
     private static final String ROOT_DIR = "/schema-repo/";
     private static final int PORT = Ports.nextAvailable();
 
-    private static final SchemaRepoClient client = new JerseySchemaRepoClient(
+    private static final String TOPIC_NAME = "group.topic";
+    private static final Topic topic = TopicBuilder.topic(TOPIC_NAME).build();
+    private static final SchemaSource schemaSource = SchemaSource.valueOf("{}");
+
+    private static final SchemaSourceClient client = new SchemaRepoSchemaSourceClient(
             ClientBuilder.newClient(),
             URI.create("http://localhost:" + PORT + ROOT_DIR)
     );
@@ -38,7 +54,7 @@ public class JerseySchemaRepoClientTest {
             wireMockConfig().port(PORT).usingFilesUnderClasspath("schema-repo-stub")
     );
 
-    @BeforeTest
+    @Before
     public void initialize() {
         wireMock.resetRequests();
         wireMock.resetMappings();
@@ -46,38 +62,48 @@ public class JerseySchemaRepoClientTest {
     }
 
     @Test
-    public void shouldCheckIfSubjectIsRegistered() {
+    public void shouldRegisterSubjectAndSchemaSource() {
         // given
-        wireMock.stubFor(get(subjectUrl("notRegistered.subject")).willReturn(notFoundResponse()));
+        stubFor(get(subjectUrl(TOPIC_NAME)).willReturn(notFoundResponse()));
+        stubFor(put(subjectUrl(TOPIC_NAME)).willReturn(okResponse()));
+        stubFor(put(registerSchemaUrl(TOPIC_NAME)).willReturn(okResponse()));
 
         // when
-        boolean exists = client.isSubjectRegistered("notRegistered.subject");
+        client.registerSchemaSource(topic, schemaSource);
 
         // then
-        wireMock.verify(1, getRequestedFor(subjectUrl("notRegistered.subject")));
-        assertThat(exists).isFalse();
+        verify(1, getRequestedFor(subjectUrl(TOPIC_NAME)));
+        verify(1, putRequestedFor(subjectUrl(TOPIC_NAME)));
+        verify(1, putRequestedFor(registerSchemaUrl(TOPIC_NAME))
+                .withHeader("Content-type", equalTo(MediaType.TEXT_PLAIN))
+                .withRequestBody(equalTo(schemaSource.value())));
     }
 
     @Test
-    public void shouldRegisterSubject() {
+    public void shouldRegisterSchemaSourceWhenSubjectIsAlreadyRegistered() {
         // given
-        wireMock.stubFor(put(subjectUrl("register.subject")).willReturn(okResponse()));
+        stubFor(get(subjectUrl(TOPIC_NAME)).willReturn(okResponse()));
+        stubFor(put(registerSchemaUrl(TOPIC_NAME)).willReturn(okResponse()));
 
         // when
-        client.registerSubject("register.subject");
+        client.registerSchemaSource(topic, schemaSource);
 
         // then
-        verify(putRequestedFor(subjectUrl("register.subject"))
-                .withHeader("Content-type", equalTo(MediaType.APPLICATION_FORM_URLENCODED)));
+        verify(1, getRequestedFor(subjectUrl(TOPIC_NAME)));
+        verify(0, putRequestedFor(subjectUrl(TOPIC_NAME)));
+        verify(1, putRequestedFor(registerSchemaUrl(TOPIC_NAME))
+                .withHeader("Content-type", equalTo(MediaType.TEXT_PLAIN))
+                .withRequestBody(equalTo(schemaSource.value())));
     }
 
     @Test
     public void shouldThrowExceptionForUnsuccessfulSubjectRegistration() {
         // given
-        wireMock.stubFor(put(subjectUrl("failed.subject")).willReturn(serverErrorResponse()));
+        stubFor(get(subjectUrl(TOPIC_NAME)).willReturn(notFoundResponse()));
+        stubFor(put(subjectUrl(TOPIC_NAME)).willReturn(serverErrorResponse()));
 
         // when
-        catchException(client).registerSubject("failed.subject");
+        catchException(client).registerSchemaSource(topic, schemaSource);
 
         // then
         assertThat((Throwable) caughtException()).isInstanceOf(SchemaRepoException.class);
@@ -86,10 +112,10 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldReturnEmptyOptionalIfLatestSchemaDoesNotExist() {
         // given
-        wireMock.stubFor(get(latestSchemaUrl("nolatest.subject")).willReturn(notFoundResponse()));
+        stubFor(get(latestSchemaUrl(TOPIC_NAME)).willReturn(notFoundResponse()));
 
         // when
-        Optional<String> schema = client.getLatestSchema("nolatest.subject");
+        Optional<SchemaSource> schema = client.getLatestSchemaSource(topic);
 
         // then
         assertThat(schema.isPresent()).isFalse();
@@ -98,37 +124,24 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldReturnLatestSchemaIfExists() {
         // given
-        wireMock.stubFor(get(latestSchemaUrl("latest.subject")).willReturn(okResponse().withBody("0\t{}")));
+        stubFor(get(latestSchemaUrl(TOPIC_NAME)).willReturn(okResponse().withBody("0\t{}")));
 
         // when
-        Optional<String> schema = client.getLatestSchema("latest.subject");
+        Optional<SchemaSource> schema = client.getLatestSchemaSource(topic);
 
         // then
-        assertThat(schema.get()).isEqualTo("{}");
+        assertThat(schema.get().value()).isEqualTo("{}");
     }
 
-    @Test
-    public void shouldRegisterSchema() {
-        // given
-        wireMock.stubFor(put(registerSchemaUrl("registerSchema.subject")).willReturn(okResponse()));
-
-        // when
-        client.registerSchema("registerSchema.subject", "{}");
-
-        // then
-        verify(1, putRequestedFor(registerSchemaUrl("registerSchema.subject"))
-                .withHeader("Content-type", equalTo(MediaType.TEXT_PLAIN))
-                .withRequestBody(equalTo("{}"))
-        );
-    }
 
     @Test
     public void shouldThrowExceptionForInvalidSchemaRegistration() {
         // given
-        wireMock.stubFor(put(registerSchemaUrl("invalidSchema.subject")).willReturn(forbiddenResponse("error")));
+        stubFor(get(subjectUrl(TOPIC_NAME)).willReturn(okResponse()));
+        stubFor(put(registerSchemaUrl(TOPIC_NAME)).willReturn(forbiddenResponse("error")));
 
         // when
-        catchException(client).registerSchema("invalidSchema.subject", "{}");
+        catchException(client).registerSchemaSource(topic, schemaSource);
 
         // then
         assertThat((Throwable) caughtException())
@@ -139,10 +152,11 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldThrowSchemaRepoExceptionForSchemaRegistration() {
         // given
-        wireMock.stubFor(put(registerSchemaUrl("repoException.subject")).willReturn(serverErrorResponse()));
+        stubFor(get(subjectUrl(TOPIC_NAME)).willReturn(okResponse()));
+        stubFor(put(registerSchemaUrl(TOPIC_NAME)).willReturn(serverErrorResponse()));
 
         // when
-        catchException(client).registerSchema("repoException.subject", "{}");
+        catchException(client).registerSchemaSource(topic, schemaSource);
 
         // then
         assertThat((Throwable) caughtException()).isInstanceOf(SchemaRepoException.class);
@@ -151,12 +165,12 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldReturnSchemaVersions() {
         // given
-        wireMock.stubFor(get(allSchemasUrl("allSchemas.subject")).willReturn(
+        wireMock.stubFor(get(allSchemasUrl(TOPIC_NAME)).willReturn(
                 okResponse().withBodyFile("all-schemas-response.json").withHeader("Content-Type", "application/json"))
         );
 
         // when
-        List<SchemaVersion> versions = client.getSchemaVersions("allSchemas.subject");
+        List<SchemaVersion> versions = client.getVersions(topic);
 
         // then
         assertThat(versions).containsExactly(
@@ -169,12 +183,12 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldReturnEmptySchemaVersionsIfNoSchemasAreRegistered() {
         // given
-        wireMock.stubFor(get(allSchemasUrl("noSchema.subject")).willReturn(
+        wireMock.stubFor(get(allSchemasUrl(TOPIC_NAME)).willReturn(
                 okResponse().withBody("").withHeader("Content-Type", "application/json"))
         );
 
         // when
-        List<SchemaVersion> versions = client.getSchemaVersions("noSchema.subject");
+        List<SchemaVersion> versions = client.getVersions(topic);
 
         // then
         assertThat(versions).isEmpty();
@@ -183,10 +197,10 @@ public class JerseySchemaRepoClientTest {
     @Test
     public void shouldReturnEmptySchemaVersionsIfSubjectDoesntExist() {
         // given
-        wireMock.stubFor(get(allSchemasUrl("noSubject.subject")).willReturn(notFoundResponse()));
+        wireMock.stubFor(get(allSchemasUrl(TOPIC_NAME)).willReturn(notFoundResponse()));
 
         // when
-        List<SchemaVersion> versions = client.getSchemaVersions("noSubject.subject");
+        List<SchemaVersion> versions = client.getVersions(topic);
 
         // then
         assertThat(versions).isEmpty();

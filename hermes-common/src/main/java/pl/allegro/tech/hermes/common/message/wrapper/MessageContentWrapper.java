@@ -13,6 +13,7 @@ import java.util.Map;
 import static java.util.Optional.of;
 
 public class MessageContentWrapper {
+
     private final JsonMessageContentWrapper jsonMessageContentWrapper;
     private final AvroMessageContentWrapper avroMessageContentWrapper;
 

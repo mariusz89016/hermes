@@ -4,7 +4,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.glassfish.hk2.api.Factory;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.domain.topic.schema.CachedSchemaVersionsRepository;
-import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceProvider;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceClient;
 import pl.allegro.tech.hermes.domain.topic.schema.SchemaVersionsRepository;
 import pl.allegro.tech.hermes.domain.topic.schema.SimpleSchemaVersionsRepository;
 
@@ -19,24 +19,24 @@ import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_CACHE_RELOAD_T
 
 public class SchemaVersionsRepositoryFactory implements Factory<SchemaVersionsRepository> {
 
-    private final SchemaSourceProvider sourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
     private final ConfigFactory configFactory;
 
     @Inject
-    public SchemaVersionsRepositoryFactory(SchemaSourceProvider sourceProvider, ConfigFactory configFactory) {
-        this.sourceProvider = sourceProvider;
+    public SchemaVersionsRepositoryFactory(SchemaSourceClient schemaSourceClient, ConfigFactory configFactory) {
+        this.schemaSourceClient = schemaSourceClient;
         this.configFactory = configFactory;
     }
 
     @Override
     public SchemaVersionsRepository provide() {
         if (configFactory.getBooleanProperty(SCHEMA_CACHE_ENABLED)) {
-            return new CachedSchemaVersionsRepository(sourceProvider,
+            return new CachedSchemaVersionsRepository(schemaSourceClient,
                     getVersionsReloader(),
                     configFactory.getIntProperty(SCHEMA_CACHE_REFRESH_AFTER_WRITE_MINUTES),
                     configFactory.getIntProperty(SCHEMA_CACHE_EXPIRE_AFTER_WRITE_MINUTES));
         }
-        return new SimpleSchemaVersionsRepository(sourceProvider);
+        return new SimpleSchemaVersionsRepository(schemaSourceClient);
     }
 
     private ExecutorService getVersionsReloader() {

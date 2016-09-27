@@ -4,25 +4,29 @@ import org.apache.avro.Schema;
 import org.glassfish.hk2.api.Factory;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.common.config.Configs;
-import pl.allegro.tech.hermes.domain.topic.schema.*;
+import pl.allegro.tech.hermes.domain.topic.schema.CachedCompiledSchemaRepository;
+import pl.allegro.tech.hermes.domain.topic.schema.CompiledSchemaRepository;
+import pl.allegro.tech.hermes.domain.topic.schema.DirectCompiledSchemaRepository;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaCompilersFactory;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceClient;
 
 import javax.inject.Inject;
 
 public class AvroCompiledSchemaRepositoryFactory implements Factory<CompiledSchemaRepository<Schema>> {
 
-    private final SchemaSourceProvider schemaSourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
     private final ConfigFactory configFactory;
 
     @Inject
-    public AvroCompiledSchemaRepositoryFactory(SchemaSourceProvider schemaSourceProvider, ConfigFactory configFactory) {
-        this.schemaSourceProvider = schemaSourceProvider;
+    public AvroCompiledSchemaRepositoryFactory(SchemaSourceClient schemaSourceClient, ConfigFactory configFactory) {
+        this.schemaSourceClient = schemaSourceClient;
         this.configFactory = configFactory;
     }
 
     @Override
     public CompiledSchemaRepository<Schema> provide() {
         return new CachedCompiledSchemaRepository<>(
-                new DirectCompiledSchemaRepository<>(schemaSourceProvider, SchemaCompilersFactory.avroSchemaCompiler()),
+                new DirectCompiledSchemaRepository<>(schemaSourceClient, SchemaCompilersFactory.avroSchemaCompiler()),
                 configFactory.getIntProperty(Configs.SCHEMA_CACHE_COMPILED_MAXIMUM_SIZE),
                 configFactory.getIntProperty(Configs.SCHEMA_CACHE_COMPILED_EXPIRE_AFTER_ACCESS_MINUTES));
     }

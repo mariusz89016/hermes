@@ -13,17 +13,17 @@ public class SimpleSchemaVersionsRepository implements SchemaVersionsRepository 
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleSchemaVersionsRepository.class);
 
-    private final SchemaSourceProvider schemaSourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
 
     @Inject
-    public SimpleSchemaVersionsRepository(SchemaSourceProvider schemaSourceProvider) {
-        this.schemaSourceProvider = schemaSourceProvider;
+    public SimpleSchemaVersionsRepository(SchemaSourceClient schemaSourceClient) {
+        this.schemaSourceClient = schemaSourceClient;
     }
 
     @Override
     public List<SchemaVersion> versions(Topic topic, boolean online) {
         try {
-            return schemaSourceProvider.versions(topic);
+            return schemaSourceClient.getVersions(topic);
         } catch (Exception e) {
             logger.error("Error while loading schema versions for topic {}", topic.getQualifiedName(), e);
             return emptyList();

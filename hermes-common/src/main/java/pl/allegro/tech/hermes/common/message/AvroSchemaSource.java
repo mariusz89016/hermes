@@ -12,9 +12,10 @@ import java.util.List;
 import java.util.function.Function;
 
 public interface AvroSchemaSource {
-    CompiledSchema<Schema> getAvroSchema(Topic topic, SchemaVersion version);
-    List<SchemaVersion> versions(Topic topic, boolean online);
 
+    CompiledSchema<Schema> getAvroSchema(Topic topic, SchemaVersion version);
+    
+    List<SchemaVersion> versions(Topic topic, boolean online);
 
     Logger logger = LoggerFactory.getLogger(AvroSchemaSource.class);
 

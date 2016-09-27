@@ -7,19 +7,19 @@ import static java.lang.String.format;
 
 public class DirectCompiledSchemaRepository<T> implements CompiledSchemaRepository<T> {
 
-    private final SchemaSourceProvider schemaSourceProvider;
+    private final SchemaSourceClient schemaSourceClient;
     private final SchemaCompiler<T> schemaCompiler;
 
-    public DirectCompiledSchemaRepository(SchemaSourceProvider schemaSourceProvider,
+    public DirectCompiledSchemaRepository(SchemaSourceClient schemaSourceClient,
                                           SchemaCompiler<T> schemaCompiler) {
-        this.schemaSourceProvider = schemaSourceProvider;
+        this.schemaSourceClient = schemaSourceClient;
         this.schemaCompiler = schemaCompiler;
     }
 
     @Override
     public CompiledSchema<T> getSchema(Topic topic, SchemaVersion version) {
         try {
-            SchemaSource schemaSource = schemaSourceProvider.get(topic, version)
+            SchemaSource schemaSource = schemaSourceClient.getSchemaSource(topic, version)
                     .orElseThrow(() -> new SchemaSourceNotFoundException(topic, version));
             return new CompiledSchema<>(schemaCompiler.compile(schemaSource), version);
         } catch (Exception e) {

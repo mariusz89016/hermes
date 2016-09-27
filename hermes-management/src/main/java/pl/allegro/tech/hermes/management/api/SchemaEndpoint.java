@@ -56,7 +56,7 @@ public class SchemaEndpoint {
     public Response save(@PathParam("topicName") String qualifiedTopicName,
                          @DefaultValue("true") @QueryParam(value = "validate") boolean validate,
                          String schema) {
-        schemaSourceService.saveSchemaSource(qualifiedTopicName, schema, validate);
+        schemaSourceService.registerSchemaSource(qualifiedTopicName, schema, validate);
         notifyFrontendSchemaChanged(qualifiedTopicName);
         return Response.status(Response.Status.CREATED).build();
     }
@@ -69,7 +69,7 @@ public class SchemaEndpoint {
     @RolesAllowed({Roles.GROUP_OWNER, Roles.ADMIN})
     @ApiOperation(value = "Delete schema", httpMethod = HttpMethod.DELETE)
     public Response delete(@PathParam("topicName") String qualifiedTopicName) {
-        schemaSourceService.deleteSchemaSource(qualifiedTopicName);
+        schemaSourceService.deleteAllSchemaSources(qualifiedTopicName);
         return Response.status(Response.Status.OK).build();
     }
 }

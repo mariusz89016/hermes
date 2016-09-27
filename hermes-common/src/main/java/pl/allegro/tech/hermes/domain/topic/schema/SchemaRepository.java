@@ -7,7 +7,6 @@ import pl.allegro.tech.hermes.common.message.AvroSchemaSource;
 
 import javax.inject.Inject;
 import java.util.List;
-import java.util.Optional;
 
 public class SchemaRepository implements AvroSchemaSource {
 

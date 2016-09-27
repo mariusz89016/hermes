@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import pl.allegro.tech.hermes.api.SchemaSource;
 import pl.allegro.tech.hermes.api.Topic;
+import pl.allegro.tech.hermes.domain.topic.schema.SchemaSourceClient;
 import pl.allegro.tech.hermes.domain.topic.schema.SchemaVersion;
 import pl.allegro.tech.hermes.management.domain.topic.TopicService;
 import pl.allegro.tech.hermes.management.infrastructure.schema.validator.SchemaValidator;
@@ -18,44 +19,45 @@ import static pl.allegro.tech.hermes.api.TopicName.fromQualifiedName;
 public class SchemaSourceService {
 
     private final TopicService topicService;
-    private final SchemaSourceRepository schemaSourceRepository;
+    private final SchemaSourceClient schemaSourceClient;
     private final SchemaValidatorProvider validatorProvider;
 
     @Autowired
-    public SchemaSourceService(TopicService topicService, SchemaSourceRepository schemaSourceRepository, SchemaValidatorProvider validatorProvider) {
+    public SchemaSourceService(TopicService topicService, SchemaSourceClient schemaSourceClient, SchemaValidatorProvider validatorProvider) {
         this.topicService = topicService;
-        this.schemaSourceRepository = schemaSourceRepository;
+        this.schemaSourceClient = schemaSourceClient;
         this.validatorProvider = validatorProvider;
     }
 
     public Optional<SchemaSource> getSchemaSource(String qualifiedTopicName) {
         Topic topic = findTopic(qualifiedTopicName);
-        return schemaSourceRepository.get(topic);
+        return schemaSourceClient.getLatestSchemaSource(topic);
     }
 
-    public void saveSchemaSource(String qualifiedTopicName, String schema, boolean validate) {
+    public void registerSchemaSource(String qualifiedTopicName, String schema, boolean validate) {
         Topic topic = findTopic(qualifiedTopicName);
         if (validate) {
             SchemaValidator validator = validatorProvider.provide(topic.getContentType());
             validator.check(schema);
         }
-        schemaSourceRepository.save(SchemaSource.valueOf(schema), topic);
-    }
-
-    public void deleteSchemaSource(String qualifiedTopicName) {
-        Topic topic = findTopic(qualifiedTopicName);
-        if (topic.getContentType() == AVRO) {
-            throw new AvroSchemaRemovalDisabledException("Topic " + qualifiedTopicName + " has Avro content-type, schema removal is disabled");
-        }
-        schemaSourceRepository.delete(topic);
-    }
-
-    private Topic findTopic(String qualifiedTopicName) {
-        return topicService.getTopicDetails(fromQualifiedName(qualifiedTopicName));
+        schemaSourceClient.registerSchemaSource(topic, SchemaSource.valueOf(schema));
     }
 
     public Optional<SchemaSource> getSchemaSource(String qualifiedTopicName, SchemaVersion version) {
         Topic topic = findTopic(qualifiedTopicName);
-        return schemaSourceRepository.get(topic, version);
+        return schemaSourceClient.getSchemaSource(topic, version);
+    }
+
+    public void deleteAllSchemaSources(String qualifiedTopicName) {
+        Topic topic = findTopic(qualifiedTopicName);
+        // TODO wywalić ifa?
+        if (topic.getContentType() == AVRO) {
+            throw new AvroSchemaRemovalDisabledException("Topic " + qualifiedTopicName + " has Avro content-type, schema removal is disabled");
+        }
+        schemaSourceClient.deleteAllSchemaSources(topic);
+    }
+
+    private Topic findTopic(String qualifiedTopicName) {
+        return topicService.getTopicDetails(fromQualifiedName(qualifiedTopicName));
     }
 }

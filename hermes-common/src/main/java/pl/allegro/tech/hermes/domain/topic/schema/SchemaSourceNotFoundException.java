@@ -6,10 +6,6 @@ import pl.allegro.tech.hermes.common.exception.HermesException;
 
 public class SchemaSourceNotFoundException extends HermesException {
 
-    public SchemaSourceNotFoundException(Topic topic) {
-        super("No schema source for topic " + topic.getQualifiedName());
-    }
-
     public SchemaSourceNotFoundException(Topic topic, SchemaVersion schemaVersion) {
         super("No schema source for topic " + topic.getQualifiedName() + " of version " + schemaVersion.value());
     }

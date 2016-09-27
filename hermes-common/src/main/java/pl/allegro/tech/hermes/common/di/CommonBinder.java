@@ -41,9 +41,8 @@ import pl.allegro.tech.hermes.domain.topic.schema.CompiledSchemaRepository;
 import pl.allegro.tech.hermes.domain.topic.schema.SchemaRepository;
 import pl.allegro.tech.hermes.infrastructure.schema.AvroCompiledSchemaRepositoryFactory;
 import pl.allegro.tech.hermes.infrastructure.schema.JsonCompiledSchemaRepositoryFactory;
-import pl.allegro.tech.hermes.infrastructure.schema.SchemaSourceProviderFactory;
 import pl.allegro.tech.hermes.infrastructure.schema.SchemaVersionsRepositoryFactory;
-import pl.allegro.tech.hermes.infrastructure.schema.repo.SchemaRepoClientFactory;
+import pl.allegro.tech.hermes.infrastructure.schema.SchemaSourceClientFactory;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.notifications.ZookeeperInternalNotificationBus;
 
 import javax.inject.Singleton;
@@ -58,8 +57,7 @@ public class CommonBinder extends AbstractBinder {
         bindFactory(ClockFactory.class).in(Singleton.class).to(Clock.class);
         bind(ZookeeperBrokerStorage.class).to(BrokerStorage.class).in(Singleton.class);
         bind(InetAddressHostnameResolver.class).in(Singleton.class).to(HostnameResolver.class);
-        bindSingletonFactory(SchemaSourceProviderFactory.class);
-        bindSingletonFactory(SchemaRepoClientFactory.class);
+        bindSingletonFactory(SchemaSourceClientFactory.class);
         bindSingletonFactory(SchemaVersionsRepositoryFactory.class);
         bindSingleton(SchemaRepository.class);
         bindFactory(JsonCompiledSchemaRepositoryFactory.class).in(Singleton.class).to(new TypeLiteral<CompiledSchemaRepository<JsonSchema>>() {});
